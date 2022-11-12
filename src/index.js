@@ -104,7 +104,9 @@ app.get("/messages", async (req, res) => {
     const limit =  parseInt(req.query.limit)
   try {
     const messages = await db.collection("messages").find().toArray();
-    res.status(200).send(messages);
+    const indexsOfMessages = messages.length-1
+    const limitMessages = messages.filter((m,i)=> i>indexsOfMessages-limit)
+    res.status(200).send(limitMessages);
   } catch (err) {
     console.log(err);
     res.sendStatus(500);
