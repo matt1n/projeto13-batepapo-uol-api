@@ -30,6 +30,31 @@ mongoClient
   })
   .catch((err) => console.log(err));
 
+async function statusVerification() {
+  try {
+    const participants = await db.collection("participants").find().toArray();
+
+    for (let i = 0; i < participants.length; i++) {
+      if (Date.now() - participants[i].lastStatus > 10000) {
+        const { _id, name } = participants[i];
+        await db.collection("participants").deleteOne({ _id: _id });
+        await db.collection("messages").insertOne({
+          from: name,
+          to: "Todos",
+          text: "sai da sala...",
+          type: "status",
+          time: dayjs().format("HH:mm:ss"),
+        });
+      }
+    }
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+  }
+}
+
+setInterval(statusVerification, 15000);
+
 app.post("/participants", async (req, res) => {
   const { name } = req.body;
 
@@ -48,6 +73,13 @@ app.post("/participants", async (req, res) => {
     await db.collection("participants").insertOne({
       name: name,
       lastStatus: Date.now(),
+    });
+    await db.collection("messages").insertOne({
+      from: name,
+      to: "Todos",
+      text: "entra na sala...",
+      type: "status",
+      time: dayjs().format("HH:mm:ss"),
     });
     res.sendStatus(201);
   } catch (err) {
@@ -101,12 +133,48 @@ app.post("/messages", async (req, res) => {
 });
 
 app.get("/messages", async (req, res) => {
-    const limit =  parseInt(req.query.limit)
+  const limit = parseInt(req.query.limit);
+  const { user } = req.headers;
   try {
     const messages = await db.collection("messages").find().toArray();
-    const indexsOfMessages = messages.length-1
-    const limitMessages = messages.filter((m,i)=> i>indexsOfMessages-limit)
+    const isForYou = messages.filter(
+      (message) =>
+        message.type === "message" ||
+        message.to === user ||
+        message.to === "Todos" ||
+        message.from === user
+    );
+    const indexsOfMessages = isForYou.length - 1;
+    const limitMessages = isForYou.filter(
+      (m, i) => i > indexsOfMessages - limit
+    );
     res.status(200).send(limitMessages);
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+  }
+});
+
+app.post("/status", async (req, res) => {
+  const { user } = req.headers;
+
+  try {
+    const participant = await db
+      .collection("participants")
+      .findOne({ name: user });
+
+    if (!participant) {
+      res.sendStatus(404);
+      return;
+    }
+
+    await db
+      .collection("participants")
+      .updateOne(
+        { _id: participant._id },
+        { $set: { lastStatus: Date.now() } }
+      );
+    res.sendStatus(200);
   } catch (err) {
     console.log(err);
     res.sendStatus(500);
