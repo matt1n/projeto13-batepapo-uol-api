@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import joi from "joi";
 import dayjs from "dayjs";
@@ -16,9 +16,9 @@ const messagesSchema = joi.object({
 });
 
 const app = express();
+app.use(cors());
 dotenv.config();
 app.use(express.json());
-app.use(cors());
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 let db;
@@ -180,5 +180,31 @@ app.post("/status", async (req, res) => {
     res.sendStatus(500);
   }
 });
+
+app.delete("/messages/:id", async (req,res)=>{
+  const {user} = req.headers
+  const {id} = req.params
+  
+  try{
+    const thisMessageExist = await db.collection("messages").findOne({_id: ObjectId(id)})
+    if (!thisMessageExist){
+      console.log(!thisMessageExist)
+      res.sendStatus(404)
+      return
+    }
+
+    if (thisMessageExist.from !== user){
+      res.sendStatus(401)
+      return
+    }
+
+    await db.collection("messages").deleteOne({_id: ObjectId(id)})
+    res.status(200).send("Mensagem removida :3")
+
+  }catch(err){
+    console.log(err)
+    res.sendStatus(500)
+  }
+})
 
 app.listen(5000, () => console.log(`Server running in port: 5000`));
