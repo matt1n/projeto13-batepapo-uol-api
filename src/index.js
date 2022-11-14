@@ -104,8 +104,8 @@ app.post("/messages", async (req, res) => {
 
   const { error } = messagesSchema.validate({ to, text, type });
   if (error) {
-    const erros = error.details.map((detail) => detail.message);
-    res.status(422).send(erros);
+    const errors = error.details.map((detail) => detail.message);
+    res.status(422).send(errors);
     return;
   }
 
@@ -181,30 +181,62 @@ app.post("/status", async (req, res) => {
   }
 });
 
-app.delete("/messages/:id", async (req,res)=>{
-  const {user} = req.headers
-  const {id} = req.params
-  
-  try{
-    const thisMessageExist = await db.collection("messages").findOne({_id: ObjectId(id)})
-    if (!thisMessageExist){
-      console.log(!thisMessageExist)
-      res.sendStatus(404)
-      return
+app.delete("/messages/:id", async (req, res) => {
+  const { user } = req.headers;
+  const { id } = req.params;
+
+  try {
+    const thisMessageExist = await db
+      .collection("messages")
+      .findOne({ _id: ObjectId(id) });
+    if (!thisMessageExist) {
+      console.log(!thisMessageExist);
+      res.sendStatus(404);
+      return;
     }
 
-    if (thisMessageExist.from !== user){
-      res.sendStatus(401)
-      return
+    if (thisMessageExist.from !== user) {
+      res.sendStatus(401);
+      return;
     }
 
-    await db.collection("messages").deleteOne({_id: ObjectId(id)})
-    res.status(200).send("Mensagem removida :3")
-
-  }catch(err){
-    console.log(err)
-    res.sendStatus(500)
+    await db.collection("messages").deleteOne({ _id: ObjectId(id) });
+    res.sendStatus(201);
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
   }
-})
+});
+
+app.put("/messages/:id", async (req, res) => {
+  const body = req.body;
+  const from = req.headers.user;
+  const id = ObjectId(req.params.id);
+
+  console.log(from);
+
+  const { error } = messagesSchema.validate(body);
+  if (error) {
+    const errors = error.details.map((detail) => detail.message);
+    res.status(422).send(errors);
+    return;
+  }
+
+  const thisMessageExist = await db.collection("messages").findOne({ _id: id });
+  if (!thisMessageExist) {
+    res.sendStatus(404);
+    return;
+  }
+
+  console.log(thisMessageExist);
+
+  if (thisMessageExist.from !== from) {
+    res.sendStatus(401);
+    return;
+  }
+
+  await db.collection("messages").updateOne({ _id: id }, { $set: body });
+  res.sendStatus(201);
+});
 
 app.listen(5000, () => console.log(`Server running in port: 5000`));
