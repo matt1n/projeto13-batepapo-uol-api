@@ -4,6 +4,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import joi from "joi";
 import dayjs from "dayjs";
+import { stripHtml } from "string-strip-html";
 
 const participantsSchema = joi.object({
   name: joi.string().required(),
@@ -63,6 +64,8 @@ app.post("/participants", async (req, res) => {
     { abortEarly: false }
   );
 
+  const sanitizedName = stripHtml(name).result.trim();
+
   if (error) {
     const erros = error.details.map((detail) => detail.message);
     res.status(422).send(erros);
@@ -71,11 +74,11 @@ app.post("/participants", async (req, res) => {
 
   try {
     await db.collection("participants").insertOne({
-      name: name,
+      name: sanitizedName,
       lastStatus: Date.now(),
     });
     await db.collection("messages").insertOne({
-      from: name,
+      from: sanitizedName,
       to: "Todos",
       text: "entra na sala...",
       type: "status",
@@ -109,9 +112,14 @@ app.post("/messages", async (req, res) => {
     return;
   }
 
+  const sanitizedTo = stripHtml(to).result.trim();
+  const sanitizedText = stripHtml(text).result.trim();
+  const sanitizedType = stripHtml(type).result.trim();
+  const sanitizedUser = stripHtml(user).result.trim();
+
   const userValidation = await db
     .collection("participants")
-    .findOne({ name: user });
+    .findOne({ name: sanitizedUser });
   if (!userValidation) {
     res.sendStatus(422);
     return;
@@ -119,10 +127,10 @@ app.post("/messages", async (req, res) => {
 
   try {
     await db.collection("messages").insertOne({
-      from: user,
-      to,
-      text,
-      type,
+      from: sanitizedUser,
+      to: sanitizedTo,
+      text: sanitizedText,
+      type: sanitizedType,
       time: dayjs().format("HH:mm:ss"),
     });
     res.sendStatus(201);
@@ -174,7 +182,7 @@ app.post("/status", async (req, res) => {
         { _id: participant._id },
         { $set: { lastStatus: Date.now() } }
       );
-    res.sendStatus(200);
+    res.sendStatus(201);
   } catch (err) {
     console.log(err);
     res.sendStatus(500);
@@ -190,7 +198,6 @@ app.delete("/messages/:id", async (req, res) => {
       .collection("messages")
       .findOne({ _id: ObjectId(id) });
     if (!thisMessageExist) {
-      console.log(!thisMessageExist);
       res.sendStatus(404);
       return;
     }
@@ -201,7 +208,7 @@ app.delete("/messages/:id", async (req, res) => {
     }
 
     await db.collection("messages").deleteOne({ _id: ObjectId(id) });
-    res.sendStatus(201);
+    res.sendStatus(200);
   } catch (err) {
     console.log(err);
     res.sendStatus(500);
@@ -222,21 +229,23 @@ app.put("/messages/:id", async (req, res) => {
     return;
   }
 
+  const sanitizedTo = stripHtml(body.to).result.trim();
+  const sanitizedText = stripHtml(body.text).result.trim();
+  const sanitizedType = stripHtml(body.type).result.trim();
+
   const thisMessageExist = await db.collection("messages").findOne({ _id: id });
   if (!thisMessageExist) {
     res.sendStatus(404);
     return;
   }
 
-  console.log(thisMessageExist);
-
   if (thisMessageExist.from !== from) {
     res.sendStatus(401);
     return;
   }
 
-  await db.collection("messages").updateOne({ _id: id }, { $set: body });
-  res.sendStatus(201);
+  await db.collection("messages").updateOne({ _id: id }, { $set: {to: sanitizedTo, text: sanitizedText, type: sanitizedType} });
+  res.sendStatus(200);
 });
 
 app.listen(5000, () => console.log(`Server running in port: 5000`));
